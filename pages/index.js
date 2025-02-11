@@ -98,7 +98,7 @@ export default function AuthPage() {
               window.location.href = '/student/dashboard';
               break;
             default:
-              window.location.href = '/dashboard';
+              window.location.href = '/select-role';
           }
         }
       } else {
