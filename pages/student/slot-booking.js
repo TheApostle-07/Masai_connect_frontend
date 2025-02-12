@@ -17,7 +17,7 @@ import {
 } from 'react-icons/fi';
 
 // Maximum number of bookings allowed per student.
-const MAX_BOOKINGS = 15;
+const MAX_BOOKINGS = 105;
 
 // ----- Dummy Connection Types (static) -----
 const connectionTypes = [
