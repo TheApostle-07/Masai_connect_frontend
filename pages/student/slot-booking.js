@@ -263,17 +263,13 @@ export default function StudentSlotBooking() {
     );
   };
 
- useEffect(() => {
+ // ----- Fetch Existing Sessions from Backend -----
+  useEffect(() => {
     const fetchSessions = async () => {
       try {
         const token = localStorage.getItem('token');
-        if (!token) {
-          throw new Error("Token not found in localStorage.");
-        }
-        // Decode the token to get the student ID (adjust the key if needed)
-        const decoded = JwtDecode.jwtDecode(token);
-        const studentId = decoded.user_id; // or decoded.id based on your token payload
-
+        // Using a static student ID for testing.
+        const studentId = "679c6adcfa0a2f65ce121758";
         const res = await fetch(`https://masai-connect-backend-w28f.vercel.app/api/bookings?user=${studentId}`, {
           headers: { "Authorization": `Bearer ${token}` }
         });
@@ -293,12 +289,8 @@ export default function StudentSlotBooking() {
         setSessions(sessionsData);
       } catch (err) {
         console.error("Error fetching sessions:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
       }
     };
-
     fetchSessions();
   }, []);
 
