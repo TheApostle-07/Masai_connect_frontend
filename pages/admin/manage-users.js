@@ -4,6 +4,8 @@ import Header from '../shared-components/Header';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
+const API_BASE_URL = 'https://masai-connect-backend-w28f.vercel.app/api';
+
 const userActions = [
   { name: "Approve", color: "bg-green-100 text-green-600 hover:bg-green-200" },
   { name: "Reject", color: "bg-orange-100 text-orange-600 hover:bg-orange-200" },
@@ -19,43 +21,21 @@ export default function ManageUsers() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
-  const [userToDelete, setUserToDelete] = useState(null); // for delete confirmation modal
+  const [userToDelete, setUserToDelete] = useState(null); // For delete confirmation
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const usersPerPage = 10;
 
+  // Fetch realtime users from the API
   useEffect(() => {
-    const fetchUsers = () => {
+    const fetchUsers = async () => {
       try {
-        // Generate more realistic dummy data
-        const firstNames = [
-          'Alice', 'Bob', 'Charlie', 'David', 'Eva', 'Frank', 'Grace',
-          'Hannah', 'Ian', 'Julia', 'Kevin', 'Laura', 'Michael', 'Nina',
-          'Oliver', 'Paula', 'Quentin', 'Rachel', 'Sam', 'Tina', 'Umar',
-          'Violet', 'Walter', 'Xena', 'Yvonne', 'Zach'
-        ];
-        const lastNames = [
-          'Smith', 'Johnson', 'Williams', 'Brown', 'Jones', 'Garcia',
-          'Miller', 'Davis', 'Rodriguez', 'Martinez', 'Hernandez', 'Lopez',
-          'Gonzalez', 'Wilson', 'Anderson', 'Thomas', 'Taylor', 'Moore',
-          'Jackson', 'Martin'
-        ];
-
-        const simulatedUsers = Array.from({ length: 34 }, (_, index) => {
-          const firstName = firstNames[index % firstNames.length];
-          const lastName = lastNames[index % lastNames.length];
-          const fullName = `${firstName} ${lastName}`;
-          return {
-            _id: `${index + 1}`,
-            name: fullName,
-            email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}${index + 1}@example.com`,
-            role: index % 2 === 0 ? 'Student' : 'Mentor',
-            status: index % 3 === 0 ? 'Pending' : 'Active',
-          };
-        });
-        setUsers(simulatedUsers);
-        setFilteredUsers(simulatedUsers);
+        const res = await fetch(`${API_BASE_URL}/users`);
+        if (!res.ok) throw new Error('Failed to load users.');
+        const data = await res.json();
+        setUsers(data);
+        setFilteredUsers(data);
       } catch (err) {
         setError('Failed to load users.');
       } finally {
@@ -65,6 +45,7 @@ export default function ManageUsers() {
     fetchUsers();
   }, []);
 
+  // Search handler
   const handleSearch = (term) => {
     const lowerTerm = term.toLowerCase();
     setFilteredUsers(
@@ -72,91 +53,125 @@ export default function ManageUsers() {
         user.name.toLowerCase().includes(lowerTerm) ||
         user.email.toLowerCase().includes(lowerTerm) ||
         user.role.toLowerCase().includes(lowerTerm) ||
-        user.status.toLowerCase().includes(lowerTerm)
+        (user.status && user.status.toLowerCase().includes(lowerTerm))
       )
     );
     setCurrentPage(1);
   };
 
-  const updateUserStatus = (user, newStatus, successMessage) => {
-    // Update the state for users and filteredUsers
-    setUsers((prevUsers) =>
-      prevUsers.map((u) => (u._id === user._id ? { ...u, status: newStatus } : u))
-    );
-    setFilteredUsers((prevUsers) =>
-      prevUsers.map((u) => (u._id === user._id ? { ...u, status: newStatus } : u))
-    );
+  // Update user status via API
+  const updateUserStatus = async (user, newStatus, successMessage) => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${user._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      if (!res.ok) throw new Error('Failed to update user.');
+      const updatedUser = await res.json();
 
-    // Define custom toast styles based on the newStatus value
-    let toastStyle = {};
-    if (newStatus === 'Active') {
-      // Approved
-      toastStyle = { backgroundColor: '#38a169', color: '#fff' }; // green
-    } else if (newStatus === 'Rejected') {
-      toastStyle = { backgroundColor: '#ed8936', color: '#fff' }; // orange
-    } else if (newStatus === 'Verified') {
-      toastStyle = { backgroundColor: '#4299e1', color: '#fff' }; // blue
-    } else if (newStatus === 'Banned') {
-      toastStyle = { backgroundColor: '#e53e3e', color: '#fff' }; // red
+      setUsers((prev) =>
+        prev.map((u) => (u._id === updatedUser._id ? updatedUser : u))
+      );
+      setFilteredUsers((prev) =>
+        prev.map((u) => (u._id === updatedUser._id ? updatedUser : u))
+      );
+
+      // Custom toast style based on status
+      let toastStyle = {};
+      if (newStatus === 'Active') {
+        toastStyle = { backgroundColor: '#38a169', color: '#fff' };
+      } else if (newStatus === 'Rejected') {
+        toastStyle = { backgroundColor: '#ed8936', color: '#fff' };
+      } else if (newStatus === 'Verified') {
+        toastStyle = { backgroundColor: '#4299e1', color: '#fff' };
+      } else if (newStatus === 'Banned') {
+        toastStyle = { backgroundColor: '#e53e3e', color: '#fff' };
+      }
+      toast(successMessage, {
+        position: "top-right",
+        autoClose: 3000,
+        style: toastStyle,
+      });
+    } catch (err) {
+      toast.error('Error updating user status.');
     }
-    toast(successMessage, {
-      position: "top-right",
-      autoClose: 3000,
-      style: toastStyle,
-    });
   };
 
+  // Handle different user actions
   const handleAction = (action, user) => {
     switch (action) {
       case 'Edit':
         setSelectedUser(user);
         break;
       case 'Delete':
-        // Show a confirmation modal instead of using confirm()
         setUserToDelete(user);
         break;
       case 'Approve':
-        updateUserStatus(user, 'Active', 'User approved successfully.');
+        updateUserStatus(user, 'ACTIVE', 'User approved successfully.');
         break;
       case 'Reject':
-        updateUserStatus(user, 'Rejected', 'User rejected successfully.');
+        updateUserStatus(user, 'REJECTED', 'User rejected successfully.');
         break;
       case 'Verify':
-        updateUserStatus(user, 'Verified', 'User verified successfully.');
+        updateUserStatus(user, 'VERIFIED', 'User verified successfully.');
         break;
       case 'Ban':
-        updateUserStatus(user, 'Banned', 'User banned successfully.');
+        updateUserStatus(user, 'BANNED', 'User banned successfully.');
         break;
       default:
         console.warn('Unknown action:', action);
     }
   };
 
-  const handleSaveEdit = () => {
-    setUsers((prevUsers) =>
-      prevUsers.map((u) => (u._id === selectedUser._id ? selectedUser : u))
-    );
-    setFilteredUsers((prevUsers) =>
-      prevUsers.map((u) => (u._id === selectedUser._id ? selectedUser : u))
-    );
-    setSelectedUser(null);
-    toast('User details updated successfully.', {
-      position: "top-right",
-      autoClose: 3000,
-      style: { backgroundColor: '#38a169', color: '#fff' }, // green
-    });
-  };
-
-  const confirmDeleteUser = () => {
-    if (userToDelete) {
-      setUsers((prevUsers) => prevUsers.filter((u) => u._id !== userToDelete._id));
-      setFilteredUsers((prevUsers) => prevUsers.filter((u) => u._id !== userToDelete._id));
-      toast('User deleted successfully.', {
+  // Save edited user details via API
+  const handleSaveEdit = async () => {
+    try {
+      const res = await fetch(`${API_BASE_URL}/users/${selectedUser._id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(selectedUser),
+      });
+      if (!res.ok) throw new Error('Failed to update user.');
+      const updatedUser = await res.json();
+      setUsers((prev) =>
+        prev.map((u) => (u._id === updatedUser._id ? updatedUser : u))
+      );
+      setFilteredUsers((prev) =>
+        prev.map((u) => (u._id === updatedUser._id ? updatedUser : u))
+      );
+      setSelectedUser(null);
+      toast('User details updated successfully.', {
         position: "top-right",
         autoClose: 3000,
-        style: { backgroundColor: '#e53e3e', color: '#fff' }, // red
+        style: { backgroundColor: '#38a169', color: '#fff' },
       });
-      setUserToDelete(null);
+    } catch (err) {
+      toast.error('Error updating user details.');
+    }
+  };
+
+  // Confirm deletion via API
+  const confirmDeleteUser = async () => {
+    if (userToDelete) {
+      try {
+        const res = await fetch(`${API_BASE_URL}/users/${userToDelete._id}`, {
+          method: 'DELETE',
+        });
+        if (!res.ok) throw new Error('Failed to delete user.');
+        setUsers((prev) => prev.filter((u) => u._id !== userToDelete._id));
+        setFilteredUsers((prev) =>
+          prev.filter((u) => u._id !== userToDelete._id)
+        );
+        toast('User deleted successfully.', {
+          position: "top-right",
+          autoClose: 3000,
+          style: { backgroundColor: '#e53e3e', color: '#fff' },
+        });
+        setUserToDelete(null);
+      } catch (err) {
+        toast.error('Error deleting user.');
+      }
     }
   };
 
@@ -164,6 +179,7 @@ export default function ManageUsers() {
     setUserToDelete(null);
   };
 
+  // Pagination calculations
   const indexOfLastUser = currentPage * usersPerPage;
   const indexOfFirstUser = indexOfLastUser - usersPerPage;
   const currentUsers = filteredUsers.slice(indexOfFirstUser, indexOfLastUser);
@@ -295,7 +311,9 @@ export default function ManageUsers() {
                     <input
                       type="text"
                       value={selectedUser.name}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, name: e.target.value })}
+                      onChange={(e) =>
+                        setSelectedUser({ ...selectedUser, name: e.target.value })
+                      }
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
                     />
                   </div>
@@ -304,7 +322,9 @@ export default function ManageUsers() {
                     <input
                       type="email"
                       value={selectedUser.email}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, email: e.target.value })}
+                      onChange={(e) =>
+                        setSelectedUser({ ...selectedUser, email: e.target.value })
+                      }
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
                     />
                   </div>
@@ -312,7 +332,9 @@ export default function ManageUsers() {
                     <label className="block text-gray-700">Role</label>
                     <select
                       value={selectedUser.role}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, role: e.target.value })}
+                      onChange={(e) =>
+                        setSelectedUser({ ...selectedUser, role: e.target.value })
+                      }
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
                     >
                       <option value="Student">Student</option>
@@ -324,12 +346,14 @@ export default function ManageUsers() {
                     <label className="block text-gray-700">Status</label>
                     <select
                       value={selectedUser.status}
-                      onChange={(e) => setSelectedUser({ ...selectedUser, status: e.target.value })}
+                      onChange={(e) =>
+                        setSelectedUser({ ...selectedUser, status: e.target.value })
+                      }
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
                     >
-                      <option value="Active">Active</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Banned">Banned</option>
+                      <option value="ACTIVE">Active</option>
+                      <option value="PENDING">Pending</option>
+                      <option value="BANNED">Banned</option>
                     </select>
                   </div>
                 </div>
