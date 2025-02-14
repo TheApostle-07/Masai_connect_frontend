@@ -4,7 +4,7 @@ import Header from '../shared-components/Header';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-const API_BASE_URL = 'https://masai-connect-backend-w28f.vercel.app/api';
+const API_BASE_URL = 'http://localhost:5003/api';
 
 const userActions = [
   { name: "Approve", color: "bg-green-100 text-green-600 hover:bg-green-200" },
@@ -15,13 +15,73 @@ const userActions = [
   { name: "Delete", color: "bg-red-100 text-red-600 hover:bg-red-200" },
 ];
 
+// Available suggestions for roles, permissions, and courses:
+const availableRoles = ["ADMIN", "MENTOR", "STUDENT"];
+const availablePermissions = [
+  "create_meeting",
+  "edit_meeting",
+  "delete_meeting",
+  "view_meeting",
+  "manage_users",
+];
+const availableCourses = ["WEB", "DSA", "MERN", "React", "Node", "UI/UX"];
+
+/** A reusable TagInput component for roles, permissions, or courses. */
+function TagInput({ tags, setTags, placeholder }) {
+  const [inputValue, setInputValue] = useState("");
+
+  const handleKeyDown = (e) => {
+    // Pressing Enter or comma will add the typed tag
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      const newTag = inputValue.trim();
+      if (newTag && !tags.includes(newTag)) {
+        setTags([...tags, newTag]);
+      }
+      setInputValue("");
+    }
+  };
+
+  const removeTag = (tag) => {
+    setTags(tags.filter((t) => t !== tag));
+  };
+
+  return (
+    <div className="flex flex-wrap gap-2 border p-2 rounded-lg">
+      {tags.map((tag, index) => (
+        <div
+          key={index}
+          className="flex items-center bg-blue-100 text-blue-800 px-2 py-1 rounded-full hover:shadow"
+        >
+          <span>{tag}</span>
+          <button
+            type="button"
+            onClick={() => removeTag(tag)}
+            className="ml-1 text-red-500 hover:text-red-700"
+          >
+            &times;
+          </button>
+        </div>
+      ))}
+      <input
+        type="text"
+        value={inputValue}
+        onChange={(e) => setInputValue(e.target.value)}
+        onKeyDown={handleKeyDown}
+        placeholder={placeholder}
+        className="flex-1 outline-none"
+      />
+    </div>
+  );
+}
+
 export default function ManageUsers() {
   const [users, setUsers] = useState([]);
   const [filteredUsers, setFilteredUsers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedUser, setSelectedUser] = useState(null);
-  const [userToDelete, setUserToDelete] = useState(null); // For delete confirmation
+  const [userToDelete, setUserToDelete] = useState(null);
 
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -45,15 +105,15 @@ export default function ManageUsers() {
     fetchUsers();
   }, []);
 
-  // Search handler
+  // Search handler (checks name, email, status, roles)
   const handleSearch = (term) => {
     const lowerTerm = term.toLowerCase();
     setFilteredUsers(
       users.filter((user) =>
         user.name.toLowerCase().includes(lowerTerm) ||
         user.email.toLowerCase().includes(lowerTerm) ||
-        user.role.toLowerCase().includes(lowerTerm) ||
-        (user.status && user.status.toLowerCase().includes(lowerTerm))
+        (user.status && user.status.toLowerCase().includes(lowerTerm)) ||
+        (user.roles && user.roles.join(' ').toLowerCase().includes(lowerTerm))
       )
     );
     setCurrentPage(1);
@@ -69,7 +129,7 @@ export default function ManageUsers() {
       });
       if (!res.ok) throw new Error('Failed to update user.');
       const updatedUser = await res.json();
-
+      // Update local state
       setUsers((prev) =>
         prev.map((u) => (u._id === updatedUser._id ? updatedUser : u))
       );
@@ -77,15 +137,15 @@ export default function ManageUsers() {
         prev.map((u) => (u._id === updatedUser._id ? updatedUser : u))
       );
 
-      // Custom toast style based on status
+      // Toast styling based on status
       let toastStyle = {};
-      if (newStatus === 'Active') {
+      if (newStatus === 'ACTIVE') {
         toastStyle = { backgroundColor: '#38a169', color: '#fff' };
-      } else if (newStatus === 'Rejected') {
+      } else if (newStatus === 'REJECTED') {
         toastStyle = { backgroundColor: '#ed8936', color: '#fff' };
-      } else if (newStatus === 'Verified') {
+      } else if (newStatus === 'VERIFIED') {
         toastStyle = { backgroundColor: '#4299e1', color: '#fff' };
-      } else if (newStatus === 'Banned') {
+      } else if (newStatus === 'BANNED') {
         toastStyle = { backgroundColor: '#e53e3e', color: '#fff' };
       }
       toast(successMessage, {
@@ -134,6 +194,7 @@ export default function ManageUsers() {
       });
       if (!res.ok) throw new Error('Failed to update user.');
       const updatedUser = await res.json();
+      // Update local state
       setUsers((prev) =>
         prev.map((u) => (u._id === updatedUser._id ? updatedUser : u))
       );
@@ -202,26 +263,52 @@ export default function ManageUsers() {
               <h1 className="text-2xl font-bold text-gray-800 mb-6 text-center lg:text-left">
                 Manage Users
               </h1>
-
               {currentUsers.length > 0 ? (
                 <>
                   <table className="w-full bg-white shadow rounded-lg">
                     <thead>
                       <tr className="border-b bg-gray-100">
-                        <th className="py-4 px-4 lg:px-6 text-left font-medium text-gray-700">Name</th>
-                        <th className="py-4 px-4 lg:px-6 text-left font-medium text-gray-700">Email</th>
-                        <th className="py-4 px-4 lg:px-6 text-left font-medium text-gray-700">Role</th>
-                        <th className="py-4 px-4 lg:px-6 text-left font-medium text-gray-700">Status</th>
-                        <th className="py-4 px-4 lg:px-6 text-center font-medium text-gray-700">Actions</th>
+                        <th className="py-4 px-4 lg:px-6 text-left font-medium text-gray-700">
+                          Name
+                        </th>
+                        <th className="py-4 px-4 lg:px-6 text-left font-medium text-gray-700">
+                          Email
+                        </th>
+                        <th className="py-4 px-4 lg:px-6 text-left font-medium text-gray-700">
+                          Status
+                        </th>
+                        <th className="py-4 px-4 lg:px-6 text-left font-medium text-gray-700">
+                          Roles
+                        </th>
+                        <th className="py-4 px-4 lg:px-6 text-left font-medium text-gray-700">
+                          Courses
+                        </th>
+                        <th className="py-4 px-4 lg:px-6 text-center font-medium text-gray-700">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {currentUsers.map((user) => (
-                        <tr key={user._id} className="border-b hover:bg-gray-50 transition">
-                          <td className="py-4 px-4 lg:px-6 text-gray-800">{user.name}</td>
-                          <td className="py-4 px-4 lg:px-6 text-gray-600">{user.email}</td>
-                          <td className="py-4 px-4 lg:px-6 text-gray-600">{user.role}</td>
-                          <td className="py-4 px-4 lg:px-6 text-gray-600">{user.status}</td>
+                        <tr
+                          key={user._id}
+                          className="border-b hover:bg-gray-50 transition"
+                        >
+                          <td className="py-4 px-4 lg:px-6 text-gray-800">
+                            {user.name}
+                          </td>
+                          <td className="py-4 px-4 lg:px-6 text-gray-600">
+                            {user.email}
+                          </td>
+                          <td className="py-4 px-4 lg:px-6 text-gray-600">
+                            {user.status}
+                          </td>
+                          <td className="py-4 px-4 lg:px-6 text-gray-600">
+                            {user.roles ? user.roles.join(', ') : ''}
+                          </td>
+                          <td className="py-4 px-4 lg:px-6 text-gray-600">
+                            {user.courses ? user.courses.join(', ') : ''}
+                          </td>
                           <td className="py-4 px-4 lg:px-6 text-right flex justify-end gap-2 flex-wrap">
                             {userActions.map((action) => (
                               <button
@@ -237,7 +324,6 @@ export default function ManageUsers() {
                       ))}
                     </tbody>
                   </table>
-
                   {/* Pagination Controls */}
                   <div className="flex justify-center items-center space-x-4 mt-6 flex-wrap">
                     <button
@@ -251,7 +337,6 @@ export default function ManageUsers() {
                     >
                       First
                     </button>
-
                     <button
                       className={`px-5 py-2 text-sm font-medium rounded-full transition-all duration-300 ${
                         currentPage === 1
@@ -259,16 +344,16 @@ export default function ManageUsers() {
                           : 'bg-blue-500 text-white hover:bg-blue-600 shadow hover:shadow-lg'
                       }`}
                       disabled={currentPage === 1}
-                      onClick={() => setCurrentPage((prev) => Math.max(prev - 1, 1))}
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.max(prev - 1, 1))
+                      }
                     >
                       Previous
                     </button>
-
                     <span className="text-gray-700 font-semibold text-sm">
                       Page <span className="text-blue-600">{currentPage}</span> of{' '}
                       <span className="text-blue-600">{totalPages}</span>
                     </span>
-
                     <button
                       className={`px-5 py-2 text-sm font-medium rounded-full transition-all duration-300 ${
                         currentPage === totalPages
@@ -276,11 +361,12 @@ export default function ManageUsers() {
                           : 'bg-blue-500 text-white hover:bg-blue-600 shadow hover:shadow-lg'
                       }`}
                       disabled={currentPage === totalPages}
-                      onClick={() => setCurrentPage((prev) => Math.min(prev + 1, totalPages))}
+                      onClick={() =>
+                        setCurrentPage((prev) => Math.min(prev + 1, totalPages))
+                      }
                     >
                       Next
                     </button>
-
                     <button
                       className={`px-5 py-2 text-sm font-medium rounded-full transition-all duration-300 ${
                         currentPage === totalPages
@@ -302,10 +388,20 @@ export default function ManageUsers() {
 
           {/* Edit User Modal */}
           {selectedUser && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-              <div className="bg-white p-6 rounded-lg shadow-lg max-w-lg w-full">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
+              <div className="relative bg-white p-6 rounded-lg shadow-lg w-full max-w-4xl max-h-[80vh] overflow-y-auto">
+                {/* Close button in top-right corner */}
+                <button
+                  onClick={() => setSelectedUser(null)}
+                  className="absolute top-4 right-4 text-2xl text-gray-500 hover:text-gray-700"
+                  aria-label="Close"
+                >
+                  &times;
+                </button>
+
                 <h2 className="text-xl font-bold mb-4">Edit User</h2>
                 <div className="space-y-4">
+                  {/* Name */}
                   <div>
                     <label className="block text-gray-700">Name</label>
                     <input
@@ -317,6 +413,7 @@ export default function ManageUsers() {
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
                     />
                   </div>
+                  {/* Email */}
                   <div>
                     <label className="block text-gray-700">Email</label>
                     <input
@@ -328,20 +425,7 @@ export default function ManageUsers() {
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
                     />
                   </div>
-                  <div>
-                    <label className="block text-gray-700">Role</label>
-                    <select
-                      value={selectedUser.role}
-                      onChange={(e) =>
-                        setSelectedUser({ ...selectedUser, role: e.target.value })
-                      }
-                      className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
-                    >
-                      <option value="Student">Student</option>
-                      <option value="Mentor">Mentor</option>
-                      <option value="Admin">Admin</option>
-                    </select>
-                  </div>
+                  {/* Status */}
                   <div>
                     <label className="block text-gray-700">Status</label>
                     <select
@@ -351,10 +435,117 @@ export default function ManageUsers() {
                       }
                       className="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-400"
                     >
-                      <option value="ACTIVE">Active</option>
-                      <option value="PENDING">Pending</option>
-                      <option value="BANNED">Banned</option>
+                      <option value="ACTIVE">ACTIVE</option>
+                      <option value="PENDING">PENDING</option>
+                      <option value="REJECTED">REJECTED</option>
+                      <option value="VERIFIED">VERIFIED</option>
+                      <option value="BANNED">BANNED</option>
                     </select>
+                  </div>
+                  {/* Is Verified */}
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={selectedUser.isVerified}
+                      onChange={(e) =>
+                        setSelectedUser({ ...selectedUser, isVerified: e.target.checked })
+                      }
+                      className="mr-2"
+                    />
+                    <label className="text-gray-700">Is Verified</label>
+                  </div>
+                  {/* Roles as Tags */}
+                  <div>
+                    <label className="block text-gray-700 mb-1">Roles</label>
+                    <TagInput
+                      tags={selectedUser.roles || []}
+                      setTags={(newTags) =>
+                        setSelectedUser({ ...selectedUser, roles: newTags })
+                      }
+                      placeholder="Add a role..."
+                    />
+                    <div className="mt-2">
+                      <span className="text-gray-600 mr-2">Available Roles:</span>
+                      {availableRoles.map((role, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => {
+                            if (!selectedUser.roles?.includes(role)) {
+                              const newRoles = [...(selectedUser.roles || []), role];
+                              setSelectedUser({ ...selectedUser, roles: newRoles });
+                            }
+                          }}
+                          className="inline-block bg-gray-200 text-gray-700 px-2 py-1 mr-2 mb-2 rounded hover:bg-gray-300"
+                        >
+                          {role}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Permissions as Tags */}
+                  <div>
+                    <label className="block text-gray-700 mb-1">Permissions</label>
+                    <TagInput
+                      tags={selectedUser.permissions || []}
+                      setTags={(newTags) =>
+                        setSelectedUser({ ...selectedUser, permissions: newTags })
+                      }
+                      placeholder="Add a permission..."
+                    />
+                    <div className="mt-2">
+                      <span className="text-gray-600 mr-2">Available Permissions:</span>
+                      {availablePermissions.map((perm, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => {
+                            if (!selectedUser.permissions?.includes(perm)) {
+                              const newPermissions = [
+                                ...(selectedUser.permissions || []),
+                                perm,
+                              ];
+                              setSelectedUser({
+                                ...selectedUser,
+                                permissions: newPermissions,
+                              });
+                            }
+                          }}
+                          className="inline-block bg-gray-200 text-gray-700 px-2 py-1 mr-2 mb-2 rounded hover:bg-gray-300"
+                        >
+                          {perm}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {/* Courses as Tags */}
+                  <div>
+                    <label className="block text-gray-700 mb-1">Courses</label>
+                    <TagInput
+                      tags={selectedUser.courses || []}
+                      setTags={(newTags) =>
+                        setSelectedUser({ ...selectedUser, courses: newTags })
+                      }
+                      placeholder="Add a course..."
+                    />
+                    <div className="mt-2">
+                      <span className="text-gray-600 mr-2">Available Courses:</span>
+                      {availableCourses.map((course, index) => (
+                        <button
+                          key={index}
+                          type="button"
+                          onClick={() => {
+                            if (!selectedUser.courses?.includes(course)) {
+                              const newCourses = [...(selectedUser.courses || []), course];
+                              setSelectedUser({ ...selectedUser, courses: newCourses });
+                            }
+                          }}
+                          className="inline-block bg-gray-200 text-gray-700 px-2 py-1 mr-2 mb-2 rounded hover:bg-gray-300"
+                        >
+                          {course}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
                 <div className="mt-6 flex justify-end space-x-4">
@@ -377,7 +568,7 @@ export default function ManageUsers() {
 
           {/* Delete Confirmation Modal */}
           {userToDelete && (
-            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 px-4">
               <div className="bg-white p-6 rounded-lg shadow-lg max-w-md w-full">
                 <h2 className="text-xl font-bold mb-4 text-red-600">Confirm Deletion</h2>
                 <p className="mb-6">
