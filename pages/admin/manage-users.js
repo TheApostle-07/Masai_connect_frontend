@@ -4,7 +4,7 @@ import Header from '../shared-components/Header';
 import { toast, ToastContainer } from 'react-toastify';
 import 'react-toastify/dist/ReactToastify.css';
 
-const API_BASE_URL = 'http://localhost:5003/api';
+const API_BASE_URL = 'https://masai-connect-backend-w28f.vercel.app/api';
 
 const userActions = [
   { name: "Approve", color: "bg-green-100 text-green-600 hover:bg-green-200" },
